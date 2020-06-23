@@ -108,17 +108,17 @@ pub fn main_js() -> Result<(), JsValue> {
             if let Ok(txt) = e.data().dyn_into::<js_sys::JsString>() {
                 console_log!("new message: {:?}", txt);
                 if let Some(message_str) = txt.as_string() {
-                    // console_log!("received a message: {:?}", message_str);
-                    // if let Ok(hello_message) = from_str::<communication::ServerMessage>(&message_str) {
-                    //     match hello_message {
-                    //         communication::ServerMessage::HelloPlayer(new_player_handle, game_state) => {
-                    //             *cloned_player_handle.lock().unwrap() = new_player_handle;
-                    //             *game_state_clone_2.lock().unwrap() = game_state;
-                    //             console_log!("connected as [#{}]", new_player_handle);
+                    console_log!("received a message: {:?}", message_str);
+                    if let Ok(hello_message) = from_str::<communication::ServerMessage>(&message_str) {
+                        match hello_message {
+                            communication::ServerMessage::HelloPlayer(new_player_handle, game_state) => {
+                                *cloned_player_handle.lock().unwrap() = new_player_handle;
+                                *game_state_clone_2.lock().unwrap() = game_state;
 
-                    //         }
-                    //     }
-                    // }
+                                console_log!("connected as [#{}]\n\n{:#?}", new_player_handle, *game_state_clone_2.lock().unwrap());
+                            }
+                        }
+                    }
 
                     (update_state.clone()())(message_str);
                 }

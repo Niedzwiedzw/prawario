@@ -1,9 +1,9 @@
 #![feature(async_closure)]
 
+mod communication;
 mod config;
 mod game;
 mod rendering;
-mod communication;
 
 // #![deny(warnings)]
 use std::collections::HashMap;
@@ -15,11 +15,11 @@ use std::sync::{
 use game::VectorDef;
 
 use futures_new::{FutureExt, StreamExt};
+use serde_json::{from_str, to_string};
+use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, RwLock};
 use warp::ws::{Message, WebSocket};
 use warp::Filter;
-use std::time::{Duration, Instant};
-use serde_json::{to_string, from_str};
 
 /// Our global unique user id counter.
 static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
@@ -33,7 +33,7 @@ pub type GameState = Arc<RwLock<game::Game>>;
 
 async fn run_game(game: GameState) {
     loop {
-        tokio::time::delay_for(Duration::from_millis(1000/60)).await;
+        tokio::time::delay_for(Duration::from_millis(1000 / 60)).await;
         game.write().await.step();
     }
 }
@@ -82,7 +82,7 @@ async fn user_connected(ws: WebSocket, users: Users, game_state: GameState) {
     println!("new player ID: {}", my_id);
     // Split the socket into a sender and receive of messages.
     let (user_ws_tx, mut user_ws_rx) = ws.split();
-    
+
     // Use an unbounded channel to handle buffering and flushing of messages
     // to the websocket...
     let (tx, rx) = mpsc::unbounded_channel();
@@ -95,14 +95,15 @@ async fn user_connected(ws: WebSocket, users: Users, game_state: GameState) {
     // Save the sender in our list of connected users.
     users.write().await.insert(my_id, tx);
 
-
     // for (&uid, tx) in users.read().await.iter() {
     users
         .read()
         .await
         .get(&my_id)
         .expect("cannot find just inserted user...?")
-        .send(Ok(Message::text(game_state.read().await.state_dump().clone())));
+        .send(Ok(Message::text(
+            game_state.read().await.state_dump().clone(),
+        )));
 
     // Return a `Future` that is basically a state machine managing
     // this specific user's connection.
@@ -136,22 +137,34 @@ async fn user_message(my_id: usize, msg: Message, users: &Users, game_state: &Ga
         return;
     };
     if msg == "ping" {
-        let hello_message = communication::ServerMessage::HelloPlayer(my_id, (*game_state.read().await).clone());
-
-        for (&uid, tx) in users.read().await.iter() {
-            if let Err(_disconnected) = tx.send(Ok(Message::text(to_string(&hello_message).expect(format!("failed to serialize server hello message: {:#?}", hello_message).as_str())))) {
-                // The tx is disconnected, our `user_disconnected` code
-                // should be happening in another task, nothing more to
-                // do here.
-            }
+        let hello_message =
+            communication::ServerMessage::HelloPlayer(my_id, (*game_state.read().await).clone());
+        if let Err(_disconnected) = users
+            .read()
+            .await
+            .get(&my_id)
+            .expect(format!("user not found: [#{}]", my_id).as_str())
+            .send(Ok(Message::text(
+                to_string(&hello_message).expect(
+                    format!(
+                        "failed to serialize server hello message: {:#?}",
+                        hello_message
+                    )
+                    .as_str(),
+                ),
+            )))
+        {
+            // The tx is disconnected, our `user_disconnected` code
+            // should be happening in another task, nothing more to
+            // do here.
         }
-        return
-    }
-
-    if let Ok(message) = from_str::<communication::ClientMessage>(msg) {
+    } else if let Ok(message) = from_str::<communication::ClientMessage>(msg) {
         game_state.write().await.handle_client_message(&message);
         for (&uid, tx) in users.read().await.iter() {
-            if let Err(_disconnected) = tx.send(Ok(Message::text(to_string(&*game_state.read().await).expect(format!("failed to serialize user message: {:#?}", message).as_str())))) {
+            if let Err(_disconnected) = tx.send(Ok(Message::text(
+                to_string(&*game_state.read().await)
+                    .expect(format!("failed to serialize user message: {:#?}", message).as_str()),
+            ))) {
                 // The tx is disconnected, our `user_disconnected` code
                 // should be happening in another task, nothing more to
                 // do here.

@@ -22,20 +22,37 @@ lto = true
 
 [features]
 # If you uncomment this line, it will enable `wee_alloc`:
-default = ["wee_alloc"]
-backend = ["tungstenite"]
+default = ["wee_alloc", "backend"]
+#default = ["backend"]
+backend = ["tokio", "warp", "futures_new", "pretty_env_logger"]
 
 [dependencies]
 # The `wasm-bindgen` crate provides the bare minimum functionality needed
 # to interact with JavaScript.
 wasm-bindgen = "0.2.45"
 js-sys = "0.3"
-tungstenite = {version = "*", optional = true }
+tungstenite = {version = "0.10.0", optional = true }
 wee_alloc = { version = "0.4.2", optional = true }
+# tokio-tungstenite = {version = "0.10.1", optional = true }
+# log = {version = "0.4", optional=true }
+# futures-util = { version = "0.3", default-features = false, features = ["async-await", "sink", "stds"], optional = true }
+# pin-project = {version = "0.4.17", optional=true }
+# tokio = { version = "0.2", default-features = false, features = ["io-util", "macros", "tcp", "dns", "io-util"], optional = true }
+# env_logger = { version = "*", optional = true }
+# tokio = {version = "*", optional = true}
+# tokio = {version = "*", optional = true}
+tokio = { version = "0.2", features = ["macros", "time"], optional = true }
+warp = {version = "0.2", optional = true, features = ["websocket"]}
+futures_new = { package = "futures", version = "0.3", default-features = false, features = ["alloc"], optional = true }
+pretty_env_logger = {version = "0.4", optional = true}
+serde_json = "1.0"
+serde = "1.0"
+itertools = "*"
+
 
 [dependencies.quicksilver]
 version = "0.4.0-alpha0.5"
-features = ["web-sys"]
+features = ["web-sys", "saving"]
 
 # `wee_alloc` is a tiny allocator for wasm that is only ~1K in code size
 # compared to the default allocator's ~10K. However, it is slower than the default

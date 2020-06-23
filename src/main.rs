@@ -6,12 +6,13 @@ mod rendering;
 mod communication;
 
 // #![deny(warnings)]
-use crate::game::GameState;
 use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
+
+use game::VectorDef;
 
 use futures_new::{FutureExt, StreamExt};
 use tokio::sync::{mpsc, RwLock};
@@ -28,10 +29,11 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 /// - Key is their id
 /// - Value is a sender of `warp::ws::Message`
 type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Result<Message, warp::Error>>>>>;
+pub type GameState = Arc<RwLock<game::Game>>;
 
 async fn run_game(game: GameState) {
     loop {
-        tokio::time::delay_for(Duration::from_millis(1000/30)).await;
+        tokio::time::delay_for(Duration::from_millis(1000/60)).await;
         game.write().await.step();
     }
 }
@@ -47,7 +49,7 @@ async fn main() {
     let users = warp::any().map(move || users.clone());
 
     // do the same for the game state
-    let game_state = GameState::default();
+    let game_state: GameState = Default::default();
     let game_running_state = Arc::clone(&game_state);
     let app = async || run_game(game_running_state).await;
 
@@ -133,17 +135,32 @@ async fn user_message(my_id: usize, msg: Message, users: &Users, game_state: &Ga
     } else {
         return;
     };
+    if msg == "ping" {
+        let hello_message = communication::ServerMessage::HelloPlayer(my_id, (*game_state.read().await).clone());
 
-    let new_msg = format!("<User#{}>: {}", my_id, msg);
-
-    // New message from this user, send it to everyone else (except same uid)...
-    for (&uid, tx) in users.read().await.iter() {
-        if let Err(_disconnected) = tx.send(Ok(Message::text(new_msg.clone()))) {
-            // The tx is disconnected, our `user_disconnected` code
-            // should be happening in another task, nothing more to
-            // do here.
+        for (&uid, tx) in users.read().await.iter() {
+            if let Err(_disconnected) = tx.send(Ok(Message::text(to_string(&hello_message).expect(format!("failed to serialize server hello message: {:#?}", hello_message).as_str())))) {
+                // The tx is disconnected, our `user_disconnected` code
+                // should be happening in another task, nothing more to
+                // do here.
+            }
         }
+        return
     }
+
+    if let Ok(message) = from_str::<communication::ClientMessage>(msg) {
+        game_state.write().await.handle_client_message(&message);
+        for (&uid, tx) in users.read().await.iter() {
+            if let Err(_disconnected) = tx.send(Ok(Message::text(to_string(&*game_state.read().await).expect(format!("failed to serialize user message: {:#?}", message).as_str())))) {
+                // The tx is disconnected, our `user_disconnected` code
+                // should be happening in another task, nothing more to
+                // do here.
+            }
+        }
+    } else {
+        println!("error: failed to parse message: {:#?}", msg);
+    }
+    // New message from this user, send it to everyone else (except same uid)...
 }
 
 async fn user_disconnected(my_id: usize, users: &Users) {

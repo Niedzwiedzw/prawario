@@ -25,6 +25,7 @@ lto = true
 default = ["wee_alloc", "backend"]
 #default = ["backend"]
 backend = ["tokio", "warp", "futures_new", "pretty_env_logger"]
+client = ["wee_alloc", "futures_new"]
 
 [dependencies]
 # The `wasm-bindgen` crate provides the bare minimum functionality needed

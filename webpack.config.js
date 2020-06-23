@@ -21,7 +21,7 @@ module.exports = {
 
     new WasmPackPlugin({
         crateDirectory: __dirname,
-        extraArgs: "-- --no-default-features --features=wee_alloc"
+        extraArgs: "-- --no-default-features --features=client"
     }),
   ],
 };

@@ -1,5 +1,3 @@
-use tokio::sync::RwLock;
-use std::sync::Arc;
 use crate::rendering::Render;
 use quicksilver::input::Key;
 use quicksilver::Input;
@@ -9,8 +7,10 @@ use quicksilver::{
     Graphics,
 };
 
-use serde_json::{from_str, to_string};
+use crate::communication::ClientMessage;
+
 use serde::{Deserialize, Serialize};
+use serde_json::{from_str, to_string};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 #[cfg(feature = "wee_alloc")]
@@ -21,7 +21,6 @@ use web_sys::console;
 use itertools::Itertools;
 
 pub type PlayerHandle = usize;
-pub type GameState = Arc<RwLock<Game>>;
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone)]
 pub enum UserInput {
@@ -33,7 +32,7 @@ pub enum UserInput {
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "quicksilver::geom::Vector")]
-struct VectorDef {
+pub struct VectorDef {
     x: f32,
     y: f32,
 }
@@ -98,9 +97,9 @@ impl Into<Vector> for UserInput {
     }
 }
 
-pub type PlayerInput = (PlayerHandle, Vector);
+pub type PlayerInput = (PlayerHandle, UserInput);
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Player {
     pub name: String,
     #[serde(with = "VectorDef")]
@@ -127,7 +126,7 @@ impl Render for Player {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Game {
     pub players: HashMap<PlayerHandle, Player>,
 }
@@ -145,7 +144,7 @@ impl Game {
         Default::default()
     }
 
-    pub fn add(&mut self, key: PlayerHandle) -> usize {
+    pub fn add(&mut self, key: PlayerHandle) -> PlayerHandle {
         self.players.insert(key, Player::new());
         key
     }
@@ -161,17 +160,28 @@ impl Game {
             .collect()
     }
 
+    pub fn to_client_message(inputs: &Vec<PlayerInput>, player_handle: PlayerHandle) -> Option<ClientMessage> {
+        if inputs.is_empty() {
+            return None
+        }
+        Some(ClientMessage { inputs: inputs.clone(), player_handle })
+    }
+
     pub fn handle_inputs(&mut self, inputs: Vec<PlayerInput>) {
-        for (handle, directions) in &inputs.iter().group_by(|(handle, direction)| handle) {
+        for (handle, directions) in &inputs.iter().group_by(|(handle, _direction)| handle) {
             if let Some(mut player) = self.players.get_mut(handle) {
-                player.direction = directions.map(|player_input| player_input.1).sum();
+                player.direction = directions.map(|player_input| player_input.1.into()).sum();
             }
         }
     }
 
+    pub fn handle_client_message(&mut self, message: &ClientMessage) {
+        self.handle_inputs(message.inputs.clone());
+    }
+
     pub fn handle_quicksilver_input(&mut self, mut input: &mut Input, player_handle: PlayerHandle) {
         let inputs = self.get_player_input(&mut input, player_handle);
-        debug_log(format!("inputs: {:?}", inputs));
+        // debug_log(format!("inputs: {:?}", inputs));
         self.handle_inputs(inputs);
     }
 
@@ -187,11 +197,11 @@ impl Game {
     }
 
     pub fn update_state(&mut self, new_state: String) {
-        *self = from_str(new_state.as_str())
-            .expect(format!("was unable to update  {:#?}\n with \n{:#?}", self, new_state).as_str())
+        if let Ok(state) = from_str(new_state.as_str()) {
+            *self = state
+        }
     }
 }
-
 
 #[cfg(test)]
 mod test_movement {
@@ -201,10 +211,22 @@ mod test_movement {
     fn test_directions() {
         let mut game = Game::new();
         let player_handle = game.add(1);
-        assert_eq!(game.players.get(&player_handle).unwrap().direction, Vector { x: 0., y: 0. });
-        game.handle_inputs(vec![(player_handle, Vector::new(1., 0.))]);
-        assert_eq!(game.players.get(&player_handle).unwrap().direction, Vector { x: 1., y: 0. });
-        game.handle_inputs(vec![(1, Vector { x: 1.0, y: 0.0 }), (1, Vector { x: 0.0, y: -1.0 })]);
-        assert_eq!(game.players.get(&player_handle).unwrap().direction, Vector { x: 1., y: -1. });
+        assert_eq!(
+            game.players.get(&player_handle).unwrap().direction,
+            Vector { x: 0., y: 0. }
+        );
+        game.handle_inputs(vec![(player_handle, UserInput::Right)]);
+        assert_eq!(
+            game.players.get(&player_handle).unwrap().direction,
+            Vector { x: 1., y: 0. }
+        );
+        game.handle_inputs(vec![
+            (1, UserInput::Right),
+            (1, UserInput::Up),
+        ]);
+        assert_eq!(
+            game.players.get(&player_handle).unwrap().direction,
+            Vector { x: 1., y: -1. }
+        );
     }
 }

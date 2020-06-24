@@ -5,6 +5,8 @@ pub mod config;
 pub mod game;
 pub mod rendering;
 
+use std::rc::Rc;
+use core::cell::RefCell;
 use crate::game::PlayerHandle;
 use std::sync::Mutex;
 use std::sync::Arc;
@@ -41,6 +43,13 @@ extern "C" {
     fn log(s: &str);
 }
 
+fn get_host() -> Option<String> {
+    web_sys::window()?
+        .location()
+        .host()
+        .ok()
+}
+
 // When the `wee_alloc` feature is enabled, this uses `wee_alloc` as the global
 // allocator.
 //
@@ -49,7 +58,7 @@ extern "C" {
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
-type ClientGameState = Arc<Mutex<game::Game>>;
+type ClientGameState = Rc<RefCell<game::Game>>;
 
 // This is like the `main` function, except for JavaScript.
 #[wasm_bindgen(start)]
@@ -61,15 +70,15 @@ pub fn main_js() -> Result<(), JsValue> {
 
     async fn app(window: Window, mut gfx: Graphics, mut input: Input) -> QsResult<()> {
         let game_state: ClientGameState = Default::default();
-        let game_state_clone_1 = Arc::clone(&game_state);
-        let game_state_clone_2 = Arc::clone(&game_state);
-        let game_state_clone_3 = Arc::clone(&game_state);
+        let game_state_clone_1 = Rc::clone(&game_state);
+        let game_state_clone_2 = Rc::clone(&game_state);
+        let default_host = get_host()
+            .or(Some(config::BACKEND_ADDRESS.to_string()))
+            .expect("we always pick a backend server");
         let update_state = || move |txt: String| {
-            Arc::clone(&game_state_clone_1).lock().expect("faield to get mutex of gamestate").update_state(txt);
+            Rc::clone(&game_state_clone_1).borrow_mut().update_state(txt);
         };
-        let player_handle: Arc<Mutex<PlayerHandle>> = Default::default();
-        let cloned_player_handle = Arc::clone(&player_handle);
-        let ws = WebSocket::new(format!("ws://{}", config::BACKEND_ADDRESS).as_str())
+        let ws = WebSocket::new(format!("ws://{}/game/", default_host).as_str())
             .expect("failed to connect to ws server");
         // For small binary messages, like CBOR, Arraybuffer is more efficient than Blob handling
         ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
@@ -112,10 +121,9 @@ pub fn main_js() -> Result<(), JsValue> {
                     if let Ok(hello_message) = from_str::<communication::ServerMessage>(&message_str) {
                         match hello_message {
                             communication::ServerMessage::HelloPlayer(new_player_handle, game_state) => {
-                                *cloned_player_handle.lock().unwrap() = new_player_handle;
-                                *game_state_clone_2.lock().unwrap() = game_state;
-
-                                console_log!("connected as [#{}]\n\n{:#?}", new_player_handle, *game_state_clone_2.lock().unwrap());
+                                *game_state_clone_2.borrow_mut() = game_state;
+                                game_state_clone_2.borrow_mut().active_player = Some(new_player_handle);
+                                console_log!("connected as [#{}]", new_player_handle);
                             }
                         }
                     }
@@ -154,14 +162,13 @@ pub fn main_js() -> Result<(), JsValue> {
         // console::log_1(&JsValue::from_str("Hello world!"));
 
         // Clear the screen to a blank, white color
-        let player_handle = game_state.lock().expect("failed to get mutex of gamestate").add(*Arc::clone(&player_handle).lock().unwrap());
         loop {
             let ws = ws.clone();
             while let Some(_) = input.next_event().await {}
             // game_state.lock().unwrap().handle_quicksilver_input(&mut input, player_handle);
-            let player_inputs = game_state.lock().unwrap().get_player_input(&mut input, player_handle);
+            let player_inputs = game_state.borrow_mut().get_player_input(&mut input);
 
-            if let Some(client_message) = game::Game::to_client_message(&player_inputs, player_handle) {
+            if let Some(client_message) = game_state.borrow().to_client_message(&player_inputs) {
                 let serialized_output = &to_string(&client_message).expect("failed to serialize user inputs");
 
                 if let Ok(_) = ws.send_with_str(
@@ -172,12 +179,12 @@ pub fn main_js() -> Result<(), JsValue> {
             }
 
 
-            game_state.lock().unwrap().handle_inputs(player_inputs);
-            game_state.lock().unwrap().step();
+            game_state.borrow_mut().handle_inputs(player_inputs);
+            game_state.borrow_mut().step();
             gfx.clear(Color::WHITE);
             // Paint a blue square with a red outline in the center of our screen
             // It should have a top-left of (350, 100) and a size of (150, 100)
-            game_state.lock().unwrap().render(&mut gfx);
+            game_state.borrow().render(&mut gfx);
             // Send the data to be drawn
             gfx.present(&window)?;
             // console_log!("{:#?}", game_state.lock().unwrap().players);

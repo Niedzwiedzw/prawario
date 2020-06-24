@@ -129,6 +129,7 @@ impl Render for Player {
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Game {
     pub players: HashMap<PlayerHandle, Player>,
+    pub active_player: Option<PlayerHandle>, // for frontend
 }
 
 impl Render for Game {
@@ -152,19 +153,21 @@ impl Game {
     pub fn get_player_input(
         &mut self,
         mut input: &mut Input,
-        player_handle: PlayerHandle,
     ) -> Vec<PlayerInput> {
-        pressed_keys(&mut input)
-            .into_iter()
-            .map(|key| (player_handle, key.into()))
-            .collect()
+        if let Some(player_handle) = self.active_player {
+            return pressed_keys(&mut input)
+                .into_iter()
+                .map(|key| (player_handle, key.into()))
+                .collect()
+        }
+        vec![]
     }
 
-    pub fn to_client_message(inputs: &Vec<PlayerInput>, player_handle: PlayerHandle) -> Option<ClientMessage> {
+    pub fn to_client_message(&self, inputs: &Vec<PlayerInput>) -> Option<ClientMessage> {
         if inputs.is_empty() {
             return None
         }
-        Some(ClientMessage { inputs: inputs.clone(), player_handle })
+        Some(ClientMessage { inputs: inputs.clone(), player_handle: self.active_player? })
     }
 
     pub fn handle_inputs(&mut self, inputs: Vec<PlayerInput>) {
@@ -179,10 +182,12 @@ impl Game {
         self.handle_inputs(message.inputs.clone());
     }
 
-    pub fn handle_quicksilver_input(&mut self, mut input: &mut Input, player_handle: PlayerHandle) {
-        let inputs = self.get_player_input(&mut input, player_handle);
-        // debug_log(format!("inputs: {:?}", inputs));
-        self.handle_inputs(inputs);
+    pub fn handle_quicksilver_input(&mut self, mut input: &mut Input) {
+        if let Some(_player_handle) = self.active_player {
+            let inputs = self.get_player_input(&mut input);
+            // debug_log(format!("inputs: {:?}", inputs));
+            self.handle_inputs(inputs);
+        }
     }
 
     pub fn step(&mut self) {
@@ -198,7 +203,8 @@ impl Game {
 
     pub fn update_state(&mut self, new_state: String) {
         if let Ok(state) = from_str(new_state.as_str()) {
-            *self = state
+            let active_player = self.active_player.clone();
+            *self = Self { active_player, ..state }
         }
     }
 }

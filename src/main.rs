@@ -68,11 +68,13 @@ async fn main() {
         });
 
     // GET / -> index html
-    let index = warp::path::end().map(|| warp::reply::html(INDEX_HTML));
+    // let index = warp::path::end().map(|| warp::reply::html(INDEX_HTML));
+    let index = warp::any()
+        .and(warp::fs::dir("dist/"));
 
-    let routes = index.or(chat);
+    let routes = chat.or(index);
 
-    warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
+    warp::serve(routes).run(([0, 0, 0, 0], 80)).await;
 }
 
 async fn user_connected(ws: WebSocket, users: Users, game_state: GameState) {

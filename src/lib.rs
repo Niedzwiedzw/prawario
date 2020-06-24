@@ -4,21 +4,17 @@ pub mod communication;
 pub mod config;
 pub mod game;
 pub mod rendering;
+pub mod obstacles;
 
 use std::rc::Rc;
 use core::cell::RefCell;
-use crate::game::PlayerHandle;
-use std::sync::Mutex;
-use std::sync::Arc;
 use rendering::Render;
 
 use quicksilver::{
-    geom::{Rectangle, Vector},
     graphics::Color,
     run, Graphics, Input, Result as QsResult, Settings, Window,
 };
 use wasm_bindgen::prelude::*;
-use web_sys::console;
 use serde::{Serialize, Deserialize};
 
 use wasm_bindgen::JsCast;
@@ -83,7 +79,6 @@ pub fn main_js() -> Result<(), JsValue> {
         // For small binary messages, like CBOR, Arraybuffer is more efficient than Blob handling
         ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
         // create callback
-        let cloned_ws = ws.clone();
         let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
             // // Handle difference Text/Binary,...
             // if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {

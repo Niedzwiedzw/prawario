@@ -4,6 +4,7 @@ mod communication;
 mod config;
 mod game;
 mod rendering;
+mod obstacles;
 
 // #![deny(warnings)]
 use std::collections::HashMap;
@@ -162,7 +163,7 @@ async fn user_message(my_id: usize, msg: Message, users: &Users, game_state: &Ga
         }
     } else if let Ok(message) = from_str::<communication::ClientMessage>(msg) {
         game_state.write().await.handle_client_message(&message);
-        for (&uid, tx) in users.read().await.iter() {
+        for (&_uid, tx) in users.read().await.iter() {
             if let Err(_disconnected) = tx.send(Ok(Message::text(
                 to_string(&*game_state.read().await)
                     .expect(format!("failed to serialize user message: {:#?}", message).as_str()),
@@ -184,45 +185,3 @@ async fn user_disconnected(my_id: usize, users: &Users) {
     // Stream closed up, so remove from the user list
     users.write().await.remove(&my_id);
 }
-
-static INDEX_HTML: &str = r#"<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <title>Warp Chat</title>
-    </head>
-    <body>
-        <h1>Warp chat</h1>
-        <div id="chat">
-            <p><em>Connecting...</em></p>
-        </div>
-        <input type="text" id="text" />
-        <button type="button" id="send">Send</button>
-        <script type="text/javascript">
-        const chat = document.getElementById('chat');
-        const text = document.getElementById('text');
-        const uri = 'ws://' + location.host + '/chat';
-        const ws = new WebSocket(uri);
-        function message(data) {
-            const line = document.createElement('p');
-            line.innerText = data;
-            chat.appendChild(line);
-        }
-        ws.onopen = function() {
-            chat.innerHTML = '<p><em>Connected!</em></p>';
-        };
-        ws.onmessage = function(msg) {
-            message(msg.data);
-        };
-        ws.onclose = function() {
-            chat.getElementsByTagName('em')[0].innerText = 'Disconnected!';
-        };
-        send.onclick = function() {
-            const msg = text.value;
-            ws.send(msg);
-            text.value = '';
-            message('<You>: ' + msg);
-        };
-        </script>
-    </body>
-</html>
-"#;

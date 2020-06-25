@@ -1,7 +1,12 @@
+use quicksilver::{
+    geom::{Circle, Vector},
+    graphics::Color,
+    Graphics,
+};
+use crate::rendering::Render;
 use itertools::Itertools;
 
 use crate::game::{PlayerHandle, VectorDef};
-use quicksilver::geom::Vector;
 
 pub type CollectibleHandle = PlayerHandle;
 
@@ -38,7 +43,7 @@ pub trait Obstacle {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct Collectible {
     pub handle: CollectibleHandle,
     pub name: String,
@@ -48,6 +53,12 @@ pub struct Collectible {
     #[serde(with = "VectorDef")]
     pub direction: Vector,
     pub size: f32,
+}
+
+impl Render for Collectible {
+    fn render(&self, gfx: &mut Graphics) {
+        gfx.fill_circle(&Circle::new(self.position, self.size as f32), Color::BLUE);
+    }
 }
 
 impl Obstacle for Collectible {

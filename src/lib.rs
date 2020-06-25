@@ -6,6 +6,7 @@ pub mod game;
 pub mod rendering;
 pub mod obstacles;
 
+use quicksilver::geom::Vector;
 use std::rc::Rc;
 use core::cell::RefCell;
 use rendering::Render;
@@ -189,6 +190,7 @@ pub fn main_js() -> Result<(), JsValue> {
     run(
         Settings {
             title: "Square Example",
+            size: Vector::new(crate::config::BOARD_WIDTH, crate::config::BOARD_HEIGHT),
             ..Settings::default()
         },
         app,

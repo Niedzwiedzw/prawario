@@ -1716,6 +1716,8 @@ dependencies = [
  "js-sys",
  "pretty_env_logger",
  "quicksilver",
+ "rand 0.7.3",
+ "rand_chacha 0.1.1",
  "serde",
  "serde_json",
  "tokio",

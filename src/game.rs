@@ -38,6 +38,7 @@ pub enum GameStateMutation {
     KillPlayer(PlayerHandle),
     HealPlayer(PlayerHandle, f32),
     SpawnCollectible,
+    DestroyCollectible(CollectibleHandle),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -132,7 +133,7 @@ impl Player {
     }
 
     pub fn heal(&mut self, amount: f32) {
-        self.size += amount;
+        self.size += amount*0.33;
     }
 }
 
@@ -186,10 +187,14 @@ impl Render for Game {
 
 impl Game {
     pub fn new() -> Self {
-        Self {
+        let new_game = Self {
             game_size: Vector::new(crate::config::BOARD_WIDTH, crate::config::BOARD_HEIGHT),
             ..Default::default()
-        }
+        };
+
+        debug_assert!(new_game.game_size.x > 0.);
+        debug_assert!(new_game.game_size.y > 0.);
+        new_game
     }
 
     pub fn add(&mut self, key: PlayerHandle) -> PlayerHandle {
@@ -198,6 +203,9 @@ impl Game {
     }
 
     pub fn add_collectible(&mut self) -> CollectibleHandle {
+        if cfg!(feature = "client") {
+            return 0
+        }
         let next_id = self.random_id();
         let position = self.get_random_location();
         self.collectibles.insert(
@@ -239,7 +247,7 @@ impl Game {
     }
 
     pub fn should_spawn_collectible(&self) -> bool {
-        self.game_clock % 6 == 0
+        self.game_clock % 400 == 1
     }
 
     pub fn handle_inputs(&mut self, inputs: Vec<PlayerInput>) {
@@ -269,10 +277,13 @@ impl Game {
     pub fn random_id(&self) -> usize {
         let mut all: Vec<&usize> = self.collectibles.keys().chain(self.players.keys()).collect();
         all.sort();
-        *all.last().or(Some(&&1usize)).unwrap().clone()
+        *all.last().or(Some(&&1usize)).unwrap().clone() + 1
     }
 
     pub fn step(&mut self) {
+        debug_assert!(self.game_size.x > 0.);
+        debug_assert!(self.game_size.y > 0.);
+
         for mutation in self.mutations() {
             match mutation {
                 GameStateMutation::KillPlayer(player_handle) => {
@@ -286,6 +297,9 @@ impl Game {
                 }
                 GameStateMutation::SpawnCollectible => {
                     self.add_collectible();
+                }
+                GameStateMutation::DestroyCollectible(collectible_handle) => {
+                    self.collectibles.remove_entry(&collectible_handle);
                 }
             }
         }
@@ -305,8 +319,10 @@ impl Game {
     pub fn update_state(&mut self, new_state: String) {
         if let Ok(state) = from_str(new_state.as_str()) {
             let active_player = self.active_player.clone();
+            let game_size = self.game_size.clone();
             *self = Self {
                 active_player,
+                game_size,
                 ..state
             }
         }
@@ -314,10 +330,11 @@ impl Game {
 
     pub fn get_random_location(&self) -> Vector {
         let mut rng = thread_rng();
-        Vector::new(
+        let pos = Vector::new(
             rng.gen_range(0.0, self.game_size.x),
             rng.gen_range(0.0, self.game_size.y),
-        )
+        );
+        pos
     }
 
     pub fn is_client(&self) -> bool {
@@ -372,10 +389,13 @@ impl Game {
                     self.collectibles.get(collectible_handle)?,
                 );
                 if player.can_kill(collectible) {
-                    return Some(vec![GameStateMutation::HealPlayer(
-                        player.handle,
-                        collectible.strength(),
-                    )]);
+                    return Some(vec![
+                        GameStateMutation::HealPlayer(
+                            player.handle,
+                            collectible.strength(),
+                        ),
+                        GameStateMutation::DestroyCollectible(*collectible_handle),
+                    ]);
                 } else {
                     return None;
                 }
@@ -421,5 +441,24 @@ mod test_movement {
             game.players.get(&player_handle).unwrap().direction,
             Vector { x: 1., y: -1. }
         );
+    }
+
+    #[test]
+    fn test_random_positions() {
+        let mut game = Game::new();
+        assert_eq!(game.game_size.x, crate::config::BOARD_WIDTH);
+        assert_eq!(game.game_size.y, crate::config::BOARD_HEIGHT);
+        let pos = game.get_random_location();
+        assert!(pos.x <= crate::config::BOARD_WIDTH);
+    }
+
+    #[test]
+    fn test_game_does_not_crash() {
+        let mut game = Game::new();
+        for _i in 0..60 {
+            game.step();
+        }
+        assert_eq!(game.game_clock, 60);
+        // assert!(game.collectibles.len() > 10);
     }
 }

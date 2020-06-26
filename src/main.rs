@@ -50,7 +50,7 @@ async fn main() {
     let users = warp::any().map(move || users.clone());
 
     // do the same for the game state
-    let game_state: GameState = Default::default();
+    let game_state: GameState = Arc::new(RwLock::new(game::Game::new()));
     let game_running_state = Arc::clone(&game_state);
     let app = async || run_game(game_running_state).await;
 

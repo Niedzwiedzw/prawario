@@ -24,6 +24,20 @@ macro_rules! min {
     }}
 }
 
+macro_rules! max {
+    ($x: expr) => ($x);
+    ($x: expr, $($z: expr),+) => {{
+        let y = min!($($z),*);
+        if $x > y {
+            $x
+        } else {
+            y
+        }
+    }}
+}
+
+
+
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum CollisionBetween {
     PlayerAndPlayer(PlayerHandle, PlayerHandle),
@@ -35,7 +49,7 @@ pub trait Obstacle {
     fn radius(&self) -> f32;
     fn center(&self) -> Vector;
     fn collides(&self, other: &impl Obstacle) -> bool {
-        self.center().distance(other.center()) < min!(self.radius(), other.radius())
+        self.center().distance(other.center()) < max!(self.radius(), other.radius())
     }
 
     fn can_kill(&self, other: &impl Obstacle) -> bool {

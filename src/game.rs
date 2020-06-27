@@ -197,6 +197,10 @@ impl Game {
         new_game
     }
 
+    pub fn get_player(&self) -> Option<&'_ Player> {
+        self.players.get(&self.active_player?)
+    }
+
     pub fn add(&mut self, key: PlayerHandle) -> PlayerHandle {
         self.players.insert(key, Player::new(key));
         key

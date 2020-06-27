@@ -14,6 +14,7 @@ use rendering::Render;
 use quicksilver::{
     graphics::Color,
     run, Graphics, Input, Result as QsResult, Settings, Window,
+    geom::Transform,
 };
 use wasm_bindgen::prelude::*;
 use serde::{Serialize, Deserialize};
@@ -180,6 +181,15 @@ pub fn main_js() -> Result<(), JsValue> {
             gfx.clear(Color::WHITE);
             // Paint a blue square with a red outline in the center of our screen
             // It should have a top-left of (350, 100) and a size of (150, 100)
+
+            let new_center = match game_state.borrow().get_player() {
+                Some(player) => player.position.clone(),
+                None => Vector::ZERO,
+            } - game_state.borrow().game_size/2.0;
+
+            let translation = Transform::translate(new_center * -1.0);
+            gfx.set_transform(translation);
+
             game_state.borrow().render(&mut gfx);
             // Send the data to be drawn
             gfx.present(&window)?;

@@ -58,7 +58,7 @@ fn get_host() -> Option<String> {
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 type ClientGameState = Rc<RefCell<game::Game>>;
-
+static render_size: Vector = Vector { x: 500.0, y: 500.0 };
 // This is like the `main` function, except for JavaScript.
 #[wasm_bindgen(start)]
 pub fn main_js() -> Result<(), JsValue> {
@@ -173,7 +173,7 @@ pub fn main_js() -> Result<(), JsValue> {
                     serialized_output
                 ) {} else {
                     console_log!("failed to send the input");
-                }
+                    }
             }
 
 
@@ -191,13 +191,13 @@ pub fn main_js() -> Result<(), JsValue> {
             let new_center = match game_state.borrow().get_player() {
                 Some(player) => player.position.clone(),
                 None => Vector::ZERO,
-            } - (game_state.borrow().game_size * proportion.powi(-1))/2.0;
+            };
 
 
             let scale = Transform::scale(Vector::ONE * proportion);
-
-            let translation = Transform::translate(new_center * -1.0);
-            gfx.set_transform(scale * translation);
+            let center = Transform::translate(render_size / 2.0);
+            let player_positoin = Transform::translate(-new_center);
+            gfx.set_transform(center * scale * player_positoin);
 
             game_state.borrow().render(&mut gfx);
             // Send the data to be drawn
@@ -209,7 +209,7 @@ pub fn main_js() -> Result<(), JsValue> {
     run(
         Settings {
             title: "Square Example",
-            size: Vector::new(crate::config::BOARD_WIDTH, crate::config::BOARD_HEIGHT),
+            size: render_size,
             ..Settings::default()
         },
         app,

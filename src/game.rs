@@ -251,7 +251,7 @@ impl Game {
     }
 
     pub fn should_spawn_collectible(&self) -> bool {
-        self.game_clock % 400 == 1
+        self.game_clock % 100 == 1
     }
 
     pub fn handle_inputs(&mut self, inputs: Vec<PlayerInput>) {

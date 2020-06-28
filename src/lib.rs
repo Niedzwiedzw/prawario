@@ -10,6 +10,7 @@ use quicksilver::geom::Vector;
 use std::rc::Rc;
 use core::cell::RefCell;
 use rendering::Render;
+use obstacles::Obstacle;
 
 use quicksilver::{
     graphics::Color,
@@ -182,13 +183,21 @@ pub fn main_js() -> Result<(), JsValue> {
             // Paint a blue square with a red outline in the center of our screen
             // It should have a top-left of (350, 100) and a size of (150, 100)
 
+            let proportion = match game_state.borrow().get_player() {
+                Some(player) => crate::config::PLAYER_MIN_SIZE / player.size,
+                None => 1.0,
+            };
+
             let new_center = match game_state.borrow().get_player() {
                 Some(player) => player.position.clone(),
                 None => Vector::ZERO,
-            } - game_state.borrow().game_size/2.0;
+            } - (game_state.borrow().game_size * proportion.powi(-1))/2.0;
+
+
+            let scale = Transform::scale(Vector::ONE * proportion);
 
             let translation = Transform::translate(new_center * -1.0);
-            gfx.set_transform(translation);
+            gfx.set_transform(scale * translation);
 
             game_state.borrow().render(&mut gfx);
             // Send the data to be drawn

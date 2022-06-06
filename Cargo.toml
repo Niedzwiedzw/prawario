@@ -42,7 +42,7 @@ wee_alloc = { version = "0.4.2", optional = true }
 # env_logger = { version = "*", optional = true }
 # tokio = {version = "*", optional = true}
 # tokio = {version = "*", optional = true}
-tokio = { version = "0.2", features = ["macros", "time"], optional = true }
+tokio = { version = "1.8", features = ["macros", "time"], optional = true }
 warp = {version = "0.2", optional = true, features = ["websocket"]}
 futures_new = { package = "futures", version = "0.3", default-features = false, features = ["alloc"], optional = true }
 pretty_env_logger = {version = "0.4", optional = true}
